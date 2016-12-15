@@ -1,0 +1,23 @@
+#!/sbin/sh
+# puppet13th@xda
+#dump current installed kernel
+workdir=/tmp/mkboot
+fstab=/tmp/mkboot/boot/ramdisk/fstab.qcom
+defaultprop=/tmp/mkboot/boot/ramdisk/default.prop
+dd if=/dev/block/bootdevice/by-name/boot of=$workdir/boot.img
+
+#unpack kernel image
+/tmp/mkboot/wrapper $workdir/boot.img $workdir/boot
+#make some modification on ramdisk
+cp $workdir/boot/ramdisk/default.prop $workdir/boot/ramdisk/default.prop.bak
+cp $workdir/boot/ramdisk/fstab.qcom $workdir/boot/ramdisk/fstab.qcom.bak
+  sed -i 's/,verify=\/dev\/block\/bootdevice\/by-name\/metadata//' $fstab
+	sed -i 's/,verify=\/dev\/block\/bootdevice\/by-name//' $fstab
+	sed -i 's/,verify//' $fstab
+	sed -i 's/verify//' $fstab
+	sed -i "s/forceencrypt/encryptable/" $fstab
+	sed -i '/ro.secureboot.devicelock/d' $defaultprop
+#repack kernel image
+/tmp/mkboot/wrapper $workdir/boot boot-new.img
+#flash new kernel image to device
+dd if=$workdir/boot/boot-new.img of=/dev/block/bootdevice/by-name/boot

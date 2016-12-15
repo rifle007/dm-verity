@@ -1,0 +1,89 @@
+#!/sbin/sh
+# LazyFlasher installer backend
+
+tmp=/tmp
+
+[ "$3" ] && {
+	zip=$3
+	console=/proc/$$/fd/$2
+	# write the location of the console buffer to /tmp/console for other scripts to use
+	echo "$console" > /tmp/console
+} || {
+	console=$(cat /tmp/console)
+	[ "$console" ] || console=/proc/$$/fd/1
+}
+
+print() {
+	echo "ui_print $1" > $console
+	echo
+}
+
+abort() {
+	[ "$1" ] && {
+		print "Error: $1"
+		print "Aborting..."
+	}
+	cleanup
+	print "Failed to patch boot image!"
+	exit 1
+}
+
+cleanup() {
+	[ "$zip" ] && rm /tmp/console
+}
+
+extract() {
+	rm -rf "$2"
+	mkdir -p "$2"
+	unzip -o "$1" -d "$2"
+}
+
+setperm() {
+	find "$3" -type d -exec chmod "$1" {} \;
+	find "$3" -type f -exec chmod "$2" {} \;
+}
+
+print "#######################################"
+print "#       A U T O - B O O T I M G       #"
+print "#                                     #"
+print "#  * disable secure boot              #"
+print "#  * dm-verity and force encryption   #"
+print "#  * thanks to - jcadduono            #"
+print "#              - puppet13th@xda       #"
+print "#                                     #"
+print "#          Modified by Rivv           #"
+print "#######################################"
+
+command -v getprop || {
+	print "Warning: getprop not found! Skipping device check!"
+	unset device_names
+}
+
+[ "$device_names" ] && {
+	print "Checking device compatibility..."
+	match=0
+	ro_product_device="$(getprop ro.product.device)"
+	ro_product_model="$(getprop ro.product.model)"
+	ro_build_product="$(getprop ro.build.product)"
+	for i in $device_names; do
+		[ "$ro_product_device" = "$i" -o "$ro_product_model" = "$i" -o "$ro_build_product" = "$i" ] && match=1
+	done
+	[ $match != 1 ] && abort "Unsupported device"
+}
+
+# Unpack the installer
+[ "$zip" ] && {
+	print "Unpacking the installer..."
+	extract "$zip" "$tmp"
+}
+cd "$tmp/mkboot"
+
+setperm 0755 0755 "$tmp/mkboot"
+
+print "Running boot image patcher..."
+sh bootimg || abort
+
+print "Boot image patching complete"
+
+cleanup
+print "Done installing!"
